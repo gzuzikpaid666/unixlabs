@@ -14,7 +14,8 @@ typedef struct {
 
 typedef struct {
     pthread_mutex_t mutex;
-    pthread_cond_t  condition;
+    pthread_cond_t  not_empty;
+    pthread_cond_t  not_full;
     bool            ready;
     bool            stopping;
     void           *data;
@@ -22,26 +23,25 @@ typedef struct {
 
 static Monitor mon = {
     .mutex     = PTHREAD_MUTEX_INITIALIZER,
-    .condition = PTHREAD_COND_INITIALIZER,
+    .not_empty = PTHREAD_COND_INITIALIZER,
+    .not_full  = PTHREAD_COND_INITIALIZER,
     .ready     = false,
     .stopping  = false,
     .data      = NULL
 };
 
-
 static void provide(Monitor *m, Event *ev)
 {
     pthread_mutex_lock(&m->mutex);
     while (m->ready)
-        pthread_cond_wait(&m->condition, &m->mutex);
+        pthread_cond_wait(&m->not_full, &m->mutex);
 
     m->data  = ev;
     m->ready = true;
     printf("[Поставщик]   событие #%d отправлено\n", ev->id);
     fflush(stdout);
 
-
-    pthread_cond_broadcast(&m->condition);
+    pthread_cond_signal(&m->not_empty);
     pthread_mutex_unlock(&m->mutex);
 }
 
@@ -49,7 +49,7 @@ static void stop(Monitor *m)
 {
     pthread_mutex_lock(&m->mutex);
     m->stopping = true;
-    pthread_cond_broadcast(&m->condition);
+    pthread_cond_broadcast(&m->not_empty);
     pthread_mutex_unlock(&m->mutex);
 }
 
@@ -57,7 +57,7 @@ static Event *consume(Monitor *m)
 {
     pthread_mutex_lock(&m->mutex);
     while (!m->ready && !m->stopping)
-        pthread_cond_wait(&m->condition, &m->mutex);
+        pthread_cond_wait(&m->not_empty, &m->mutex);
 
     Event *ev = NULL;
     if (m->ready) {
@@ -66,7 +66,7 @@ static Event *consume(Monitor *m)
         m->ready = false;
         printf("[Потребитель] событие #%d получено\n", ev->id);
         fflush(stdout);
-        pthread_cond_broadcast(&m->condition);
+        pthread_cond_signal(&m->not_full);
     }
     pthread_mutex_unlock(&m->mutex);
     return ev;
@@ -110,7 +110,8 @@ int main(void)
     pthread_join(prod, NULL);
     pthread_join(cons, NULL);
 
-    pthread_cond_destroy(&mon.condition);
+    pthread_cond_destroy(&mon.not_empty);
+    pthread_cond_destroy(&mon.not_full);
     pthread_mutex_destroy(&mon.mutex);
     return 0;
 }
