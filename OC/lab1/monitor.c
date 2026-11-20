@@ -36,7 +36,7 @@ static void provide(Monitor *m, Event *ev)
     while (m->ready)
         pthread_cond_wait(&m->not_full, &m->mutex);
 
-    m->data  = ev;
+    m->data  = (void *)ev;
     m->ready = true;
     printf("[Поставщик]   событие #%d отправлено\n", ev->id);
     fflush(stdout);
@@ -61,7 +61,7 @@ static Event *consume(Monitor *m)
 
     Event *ev = NULL;
     if (m->ready) {
-        ev = m->data;
+        ev = (Event *)m->data;
         m->data  = NULL;
         m->ready = false;
         printf("[Потребитель] событие #%d получено\n", ev->id);
@@ -74,12 +74,12 @@ static Event *consume(Monitor *m)
 
 static void *producer(void *arg)
 {
-    Monitor *m = arg;
+    Monitor *m = (Monitor *)arg;
     for (int i = 1; i <= EVENTS_COUNT; i++) {
         struct timespec ts = { .tv_sec = 1, .tv_nsec = 0 };
         nanosleep(&ts, NULL);
 
-        Event *ev = malloc(sizeof *ev);
+        Event *ev = (Event *)malloc(sizeof(Event));
         if (!ev) { perror("malloc"); break; }
         ev->id      = i;
         ev->payload = strdup("данные события");
@@ -91,7 +91,7 @@ static void *producer(void *arg)
 
 static void *consumer(void *arg)
 {
-    Monitor *m = arg;
+    Monitor *m = (Monitor *)arg;
     Event *ev;
     while ((ev = consume(m)) != NULL) {
         free(ev->payload);
@@ -104,8 +104,8 @@ int main(void)
 {
     pthread_t prod, cons;
 
-    pthread_create(&cons, NULL, consumer, &mon);
-    pthread_create(&prod, NULL, producer, &mon);
+    pthread_create(&cons, NULL, consumer, (void *)&mon);
+    pthread_create(&prod, NULL, producer, (void *)&mon);
 
     pthread_join(prod, NULL);
     pthread_join(cons, NULL);
