@@ -11,7 +11,6 @@ stopping = False
 
 
 def on_sigterm(signum, frame):
-    # штатное завершение: текущая задача будет доделана, новые не берём
     global stopping
     print(f"[{HOSTNAME}] got signal {signum}, finishing current task and exiting", flush=True)
     stopping = True
@@ -68,6 +67,7 @@ def main():
             "worker": HOSTNAME,
         })
         r.hincrby("stats:workers", HOSTNAME, 1)
+        r.publish(f"done:{task_id}", "done")
         print(f"[{HOSTNAME}] task {task_id} done", flush=True)
     print(f"[{HOSTNAME}] stopped cleanly", flush=True)
 
